@@ -6,7 +6,7 @@ import requests
 import json
 import os
 from transifex.exceptions import TransifexAPIException, InvalidSlugException
-from transifex.util import slugify
+from transifex.util import slugify, force_unicode
 
 class TransifexAPI(object):
     def __init__(self, username, password, host):
@@ -28,7 +28,7 @@ class TransifexAPI(object):
 
     def new_project(self, slug, name=None, source_language_code=None,
                     outsource_project_name=None, private=False,
-                    repository_url=None):
+                    repository_url=None, team=None):
         """
         Create a new project on transifex
         
@@ -46,7 +46,9 @@ class TransifexAPI(object):
         @param repository_url (optional)
             The url for the repository. This is required if private is set to
             False
-            
+        @param team (optional)
+            Transifex team name for this project
+
         @returns None
            
         @raises `TransifexAPIException`
@@ -64,10 +66,14 @@ class TransifexAPI(object):
         data = {
             'name': name, 'slug': slug,
             'source_language_code': source_language_code, 'description': name,
-            'private': private, 'repository_url': repository_url
+            'private': private
         }
+        if repository_url is not None:
+            data['repository_url'] = repository_url
         if outsource_project_name is not None:
             data['outsource'] = outsource_project_name
+        if team is not None:
+            data['team'] = force_unicode(team)
 
         response = requests.post(
              url, data=json.dumps(data), auth=self._auth, headers=headers,
@@ -102,7 +108,7 @@ class TransifexAPI(object):
         return json.loads(response.content)
         
     def new_resource(self, project_slug, path_to_pofile, resource_slug=None,
-                     resource_name=None):
+                     resource_name=None, i18n_type=None):
         """
         Creates a new resource with the specified slug from the given file.
         
@@ -138,7 +144,7 @@ class TransifexAPI(object):
         headers = {'content-type': 'application/json'}
         data = {
             'name': resource_name, 'slug': resource_slug, 'content': content,
-            'i18n_type': 'PO'
+            'i18n_type': i18n_type
         }
 
         response = requests.post(
@@ -147,8 +153,8 @@ class TransifexAPI(object):
         if response.status_code != requests.codes['CREATED']:
             raise TransifexAPIException(response)
         
-    def update_source_translation(self, project_slug, resource_slug,
-                                  path_to_pofile):
+    def update_source_translation(self, project_slug, path_to_resfile,
+                                  resource_slug=None):
         """
         Update the source translation for a give resource
         
@@ -156,8 +162,8 @@ class TransifexAPI(object):
             the project slug
         @param resource_slug
             the resource slug
-        @param path_to_pofile
-            the path to the pofile which will be uploaded
+        @param path_to_resfile
+            the path to the resfile which will be uploaded
 
         @return dictionary with info
             Info may include keys
@@ -168,10 +174,20 @@ class TransifexAPI(object):
         @raises `TransifexAPIException`
         @raises `IOError`
         """
+
+        __, filename = os.path.split(path_to_resfile)
+        if resource_slug is None:
+            resource_slug = slugify(filename)
+        else:
+            if resource_slug != slugify(resource_slug):
+                raise InvalidSlugException(
+                    '%r is not a valid slug' % (resource_slug)
+                )
+
         url = '%s/project/%s/resource/%s/content/' % (
             self._base_api_url, project_slug, resource_slug
         )
-        content = open(path_to_pofile, 'r').read()
+        content = open(path_to_resfile, 'r').read()
         headers = {'content-type': 'application/json'}
         data = {'content': content}
         response = requests.put(
@@ -183,6 +199,35 @@ class TransifexAPI(object):
         else:
             return json.loads(response.content)
         
+    def new_language(self, project_slug, language_code, coordinators):
+        """
+        Creates a new language in a project (if it already exists this is a no-op).
+        
+        @param project_slug
+            the project slug
+        @param language_code
+            the language_code
+        @param coordinators
+            the coordinators
+            
+        @return None
+        
+        @raises `TransifexAPIException`
+        @raises `IOError`
+        """
+        url = '%s/project/%s/languages/' % (self._base_api_url, project_slug)
+        
+        headers = {'content-type': 'application/json'}
+        data = {
+            'language_code': language_code, 'coordinators': coordinators
+        }
+
+        response = requests.post(
+             url, data=json.dumps(data), auth=self._auth, headers=headers,
+        )
+        if response.status_code != requests.codes['CREATED']:
+            raise TransifexAPIException(response)
+
     def delete_resource(self, project_slug, resource_slug):
         """
         Deletes the given resource
@@ -337,4 +382,3 @@ class TransifexAPI(object):
         url = '%s/projects/' % (self._base_api_url)
         response = requests.get(url, auth=self._auth)
         return response.status_code == requests.codes['OK']
-        
