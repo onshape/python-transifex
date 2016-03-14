@@ -323,7 +323,34 @@ class TransifexAPI(object):
             for line in response.iter_content():
                 handle.write(line)
             handle.close()
-            
+
+    def get_statistics(self, project_slug, resource_slug, language_code):
+        """
+        Returns the resource statistics.
+
+        @param project_slug
+            The project slug
+        @param resource_slug
+            The resource slug
+        @param language_code
+            The language_code of the file.
+            This should be the *Transifex* language code
+
+        @return dictionary with stat info
+
+        @raises `TransifexAPIException`
+        @raises `IOError`
+        """
+        url = '%s/project/%s/resource/%s/stats/%s/' % (
+            self._base_api_url, project_slug, resource_slug, language_code
+        )
+
+        response = requests.get(url, auth=self._auth)
+        if response.status_code != requests.codes['OK']:
+            raise TransifexAPIException(response)
+
+        return json.loads(response.content)
+
     def list_languages(self, project_slug, resource_slug):
         """
         List all the languages available for a given resource in a project
