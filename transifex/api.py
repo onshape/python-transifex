@@ -107,15 +107,15 @@ class TransifexAPI(object):
         
         return json.loads(response.content)
         
-    def new_resource(self, project_slug, path_to_pofile, resource_slug=None,
+    def new_resource(self, project_slug, path_to_resfile, resource_slug=None,
                      resource_name=None, i18n_type=None):
         """
         Creates a new resource with the specified slug from the given file.
         
         @param project_slug
             the project slug
-        @param path_to_pofile
-            the path to the pofile which will be uploaded
+        @param path_to_resfile
+            the path to the resource file which will be uploaded
         @param resource_slug (optional)
             the resource slug, defaults to a sluggified version of the filename
         @param resource_name (optional)
@@ -127,9 +127,8 @@ class TransifexAPI(object):
         @raises `IOError`
         """
         url = '%s/project/%s/resources/' % (self._base_api_url, project_slug)
-        content = open(path_to_pofile, 'r').read()
 
-        __, filename = os.path.split(path_to_pofile)
+        __, filename = os.path.split(path_to_resfile)
         if resource_slug is None:
             resource_slug = slugify(filename)
         else:
@@ -137,24 +136,30 @@ class TransifexAPI(object):
                 raise InvalidSlugException(
                     '%r is not a valid slug' % (resource_slug)
                 )
-            
         if resource_name is None:
             resource_name = resource_slug
-        
-        headers = {'content-type': 'application/json'}
-        data = {
-            'name': resource_name, 'slug': resource_slug, 'content': content,
-            'i18n_type': i18n_type
-        }
 
-        response = requests.post(
-             url, data=json.dumps(data), auth=self._auth, headers=headers,
-        )
+        if i18n_type == "STRINGS":
+            data = {
+                'name': resource_name, 'slug': resource_slug,
+                'i18n_type': i18n_type
+            }
+            with open(path_to_resfile) as f:
+                response = requests.post(url, data=data, auth=self._auth, files={filename: f})
+        else:
+            content = open(path_to_resfile, 'r').read()
+            headers = {'content-type': 'application/json'}
+            data = {
+                'name': resource_name, 'slug': resource_slug, 'content': content,
+                'i18n_type': i18n_type
+            }
+            response = requests.post(url, data=json.dumps(data), auth=self._auth, headers=headers)
+        
         if response.status_code != requests.codes['CREATED']:
             raise TransifexAPIException(response)
         
     def update_source_translation(self, project_slug, path_to_resfile,
-                                  resource_slug=None):
+                                  resource_slug=None, i18n_type=None):
         """
         Update the source translation for a give resource
         
@@ -187,12 +192,15 @@ class TransifexAPI(object):
         url = '%s/project/%s/resource/%s/content/' % (
             self._base_api_url, project_slug, resource_slug
         )
-        content = open(path_to_resfile, 'r').read()
-        headers = {'content-type': 'application/json'}
-        data = {'content': content}
-        response = requests.put(
-             url, data=json.dumps(data), auth=self._auth, headers=headers,
-        )
+
+        if i18n_type == "STRINGS":
+            with open(path_to_resfile) as f:
+                response = requests.put(url, auth=self._auth, files={filename: f})
+        else:
+            content = open(path_to_resfile, 'r').read()
+            headers = {'content-type': 'application/json'}
+            data = {'content': content}
+            response = requests.put(url, data=json.dumps(data), auth=self._auth, headers=headers)
         
         if response.status_code != requests.codes['OK']:
             raise TransifexAPIException(response)
