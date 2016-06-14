@@ -82,6 +82,29 @@ class TransifexAPI(object):
         if response.status_code != requests.codes['CREATED']:
             raise TransifexAPIException(response)
 
+    def list_projects(self, start, number):
+        """
+        List project info
+
+        @param start
+            start index
+        @param number
+            number of projects to retrieve
+        @returns list of dictionaries with project info
+
+        @raises `TransifexAPIException`
+        """
+        url = '%s/projects/' % (self._base_api_url)
+        payload = {}
+        payload['start'] = start
+        payload['end'] = start + number
+        response = requests.get(url, auth=self._auth, params=payload)
+
+        if response.status_code != requests.codes['OK']:
+            raise TransifexAPIException(response)
+
+        return json.loads(response.content)
+
     def list_resources(self, project_slug):
         """
         List all resources in a project
@@ -106,7 +129,7 @@ class TransifexAPI(object):
             raise TransifexAPIException(response)
         
         return json.loads(response.content)
-        
+
     def new_resource(self, project_slug, path_to_resfile, resource_slug=None,
                      resource_name=None, i18n_type=None):
         """
@@ -417,3 +440,33 @@ class TransifexAPI(object):
         url = '%s/projects/' % (self._base_api_url)
         response = requests.get(url, auth=self._auth)
         return response.status_code == requests.codes['OK']
+
+    def get_translation_memory(self, project_slug, file_name):
+        """
+        Return translation memory for the requested project in TMX format.
+
+        @param project_slug
+            The project slug
+        @param file_name
+            The path to the pofile which will be saved
+
+        @return None
+
+        @raises `TransifexAPIException`
+        @raises `IOError`
+        """
+        url = '%s/project/%s/tm/exchange' % (
+            self._base_api_url, project_slug
+        )
+        output_path = file_name
+        query = {
+            'file': ''
+        }
+        response = requests.get(url, auth=self._auth, params=query)
+        if response.status_code != requests.codes['OK']:
+            raise TransifexAPIException(response)
+        else:
+            handle = open(output_path, 'w')
+            for line in response.iter_content():
+                handle.write(line)
+            handle.close()
