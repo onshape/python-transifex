@@ -318,7 +318,7 @@ class TransifexAPI(object):
             return json.loads(response.content)
             
     def get_translation(self, project_slug, resource_slug, language_code,
-                        path_to_pofile):
+                        path_to_pofile, params=None):
         """
         Returns the requested translation, if it exists. The translation is
         returned as a serialized string, unless the GET parameter file is
@@ -346,6 +346,8 @@ class TransifexAPI(object):
         query = {
             'file': ''         
         }
+        if params:
+            query.update(params)
         response = requests.get(url, auth=self._auth, params=query)
         if response.status_code != requests.codes['OK']:
             raise TransifexAPIException(response)
